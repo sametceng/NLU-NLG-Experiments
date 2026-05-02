@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # CENG467 Midterm
 
 Student Name: <Samet Buldanlıoğlu>  
@@ -35,3 +36,7 @@ Alternatively, install dependencies locally:
 
 ```bash
 pip install -r requirements.txt -->
+=======
+# NLU-NLG-Experiments
+Experiments on natural language understanding and generation tasks, including text classification, NER, summarization, translation, and language modeling.
+>>>>>>> 191c656c900cdd38da98686afa8ac81b0d820b4a
