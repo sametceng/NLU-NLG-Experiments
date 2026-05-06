@@ -1,0 +1,959 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{geometry}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{longtable}
+\usepackage{multirow}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{enumitem}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{caption}
+\usepackage{url}
+\usepackage{listings}
+
+\geometry{margin=1in}
+\setlength{\parskip}{0.6em}
+\setlength{\parindent}{0pt}
+\renewcommand{\arraystretch}{1.15}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    citecolor=blue,
+    urlcolor=blue
+}
+
+\lstset{
+    basicstyle=\ttfamily\small,
+    breaklines=true,
+    frame=single,
+    columns=fullflexible
+}
+
+\title{CENG 467 Natural Language Understanding and Generation\\Take-Home Midterm Report}
+\author{Samet Buldanlıoğlu\\Student ID: 300201085}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\begin{center}
+\textbf{Repository / Colab Link:} \url{https://github.com/sametceng/NLU-NLG-Experiments}
+\end{center}
+
+\begin{abstract}
+This report presents five experiments covering major natural language understanding and generation tasks: text classification, named entity recognition, text summarization, machine translation, and language modeling. The experiments compare classical, neural, and transformer-based approaches using benchmark datasets and standard evaluation metrics. All experiments were conducted with a fixed random seed of 42 where applicable, and subsets were used in some tasks for computational feasibility. The goal of the report is not only to compare performance, but also to analyze model behavior, error patterns, and methodological trade-offs.
+\end{abstract}
+
+\tableofcontents
+\newpage
+
+% =========================================================
+\section{Question 1 -- Representation Learning in Text Classification}
+% =========================================================
+
+\subsection{Dataset Description}
+
+For this task, the SST-2 dataset was used as the benchmark sentiment classification dataset \cite{socher2013recursive}. SST-2 is a binary sentiment classification dataset where each input is a sentence and each label indicates whether the sentiment is negative or positive. The labels are defined as follows:
+
+\begin{itemize}[leftmargin=*]
+    \item 0: negative
+    \item 1: positive
+\end{itemize}
+
+To make the experiments computationally efficient and reproducible, a subset of the dataset was used. The training subset contained 3000 examples, and the validation subset contained 500 examples. A fixed random seed of 42 was used for shuffling and subset selection. All models were trained and evaluated on the same train-validation split.
+
+\subsection{Preprocessing and Tokenization Strategies}
+
+Several TF-IDF preprocessing strategies were tested to examine the effects of normalization, stopword removal, and n-gram selection.
+
+\begin{table}[H]
+\centering
+\caption{TF-IDF preprocessing strategy comparison.}
+\begin{tabular}{p{2.2cm}p{8cm}cc}
+\toprule
+Strategy & Description & Accuracy & Macro-F1 \\
+\midrule
+Strategy 1 & Unigram + bigram, no stopword removal & \textbf{0.760} & \textbf{0.756} \\
+Strategy 2 & Unigram only, English stopword removal & 0.730 & 0.717 \\
+Strategy 3 & Unigram + bigram + trigram, no stopword removal & 0.750 & 0.747 \\
+Strategy 4 & Unigram + bigram, stopword removal including \texttt{no/not} & 0.724 & 0.708 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Strategy 1 achieved the best TF-IDF performance. This suggests that preserving stopwords and using both unigram and bigram features is useful for sentiment classification. In particular, short expressions such as \textit{not good}, \textit{no fun}, and \textit{very bad} can carry important sentiment information. Strategy 4 produced the lowest Macro-F1 score, especially reducing negative recall, which shows that removing negation words such as \textit{no} and \textit{not} harms sentiment classification performance.
+
+\subsection{Models}
+
+Three representation learning approaches were implemented and compared:
+
+\begin{enumerate}[leftmargin=*]
+    \item TF-IDF + Logistic Regression as a sparse lexical baseline.
+    \item BiLSTM as a dense sequential neural model.
+    \item DistilBERT as a contextual transformer-based model \cite{devlin2019bert,sanh2019distilbert}.
+\end{enumerate}
+
+The TF-IDF model used Strategy 1 as the final sparse baseline because it achieved the best validation performance among the TF-IDF variants. The BiLSTM model used word embeddings, a bidirectional LSTM layer, and a fully connected classification layer. DistilBERT was fine-tuned for binary sequence classification using the same train and validation subsets.
+
+\subsection{Final Results}
+
+\begin{table}[H]
+\centering
+\caption{Question 1 final model comparison.}
+\begin{tabular}{p{4.5cm}p{5.5cm}cc}
+\toprule
+Model & Representation Type & Accuracy & Macro-F1 \\
+\midrule
+TF-IDF + Logistic Regression & Sparse lexical representation & 0.760 & 0.756 \\
+BiLSTM & Dense sequential representation & 0.640 & 0.610 \\
+DistilBERT & Contextual transformer representation & \textbf{0.872} & \textbf{0.872} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+DistilBERT achieved the best overall performance, with 0.872 Accuracy and 0.872 Macro-F1. This result shows the advantage of contextual transformer-based representations. Unlike TF-IDF, DistilBERT can represent words according to their surrounding context. Unlike the BiLSTM model, it also benefits from large-scale pretraining.
+
+The TF-IDF model performed reasonably well and remained a strong interpretable baseline. The BiLSTM model underperformed compared with TF-IDF and DistilBERT, likely because it was trained from scratch on a limited subset without pretrained embeddings.
+
+\subsection{Misclassification Analysis}
+
+Five misclassified examples from the best-performing DistilBERT model were analyzed.
+
+\begin{table}[H]
+\centering
+\caption{Misclassified examples from DistilBERT.}
+\begin{tabular}{p{0.6cm}p{7cm}p{1.8cm}p{2.1cm}p{3.5cm}}
+\toprule
+No. & Sentence & True & Predicted & Error Pattern \\
+\midrule
+1 & ``you'll gasp appalled and laugh outraged...'' & positive & negative & Mixed sentiment and negative lexical cues \\
+2 & ``sam mendes has become valedictorian...'' & negative & positive & Implicit criticism or sarcasm \\
+3 & ``not far beneath the surface...'' & positive & negative & Negative-sounding vocabulary \\
+4 & ``no screen fantasy-adventure...'' & positive & negative & Negation-like structure misunderstood \\
+5 & ``i'll bet the video game is a lot more fun than the film.'' & negative & positive & Comparative expression with positive word \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+These examples show that even DistilBERT struggles with subtle sentiment expressions. Several errors contain both positive and negative lexical cues. For example, words such as \textit{appalled}, \textit{outraged}, \textit{nasty}, and \textit{disturbing} may bias the model toward the negative class, even when the gold label is positive. Another common error pattern is implicit criticism or sarcasm, where the sentence does not directly use strongly negative words but still conveys negative sentiment.
+
+The fifth example is especially interesting because the word \textit{fun} is positive, but the sentence actually criticizes the film by saying that the video game is more fun than the film. This shows that comparative structures can still be difficult for contextual models.
+
+\subsection{Discussion}
+
+The results demonstrate clear differences between sparse, dense, and contextual representations. TF-IDF is simple, efficient, and interpretable because each feature corresponds to a word or n-gram. However, it has limited ability to capture deeper context. BiLSTM can model word order and sequential dependencies, but it requires more data and careful tuning when trained from scratch. DistilBERT achieved the strongest performance because it uses pretrained contextual embeddings.
+
+Overall, contextual transformer representations provided the best generalization performance, while TF-IDF remained a strong and interpretable baseline. The BiLSTM model showed the limitations of training a neural sequence model from scratch on a small subset.
+
+% =========================================================
+\section{Question 2 -- Named Entity Recognition}
+% =========================================================
+
+\subsection{Dataset Description and Annotation Structure}
+
+For this task, the CoNLL-2003 dataset was used for named entity recognition \cite{tjong2003conll}. The dataset consists of tokenized sentences, where each token is annotated with a named entity label. Each example contains tokens, part-of-speech tags, chunk tags, and named entity tags. In this experiment, only the \texttt{tokens} and \texttt{ner\_tags} fields were used.
+
+\begin{table}[H]
+\centering
+\caption{CoNLL-2003 dataset split sizes.}
+\begin{tabular}{lc}
+\toprule
+Split & Number of Sentences \\
+\midrule
+Train & 14,041 \\
+Validation & 3,250 \\
+Test & 3,453 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+To keep the experiments computationally efficient, a subset was used.
+
+\begin{table}[H]
+\centering
+\caption{Used subset sizes for NER experiments.}
+\begin{tabular}{lc}
+\toprule
+Split & Used Size \\
+\midrule
+Train & 3,000 \\
+Validation & 800 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The named entity labels follow the BIO tagging scheme:
+
+\begin{lstlisting}
+['O', 'B-PER', 'I-PER', 'B-ORG', 'I-ORG', 'B-LOC', 'I-LOC', 'B-MISC', 'I-MISC']
+\end{lstlisting}
+
+\begin{table}[H]
+\centering
+\caption{BIO label meanings.}
+\begin{tabular}{ll}
+\toprule
+Label & Meaning \\
+\midrule
+O & Outside any named entity \\
+B-PER & Beginning of a person entity \\
+I-PER & Inside a person entity \\
+B-ORG & Beginning of an organization entity \\
+I-ORG & Inside an organization entity \\
+B-LOC & Beginning of a location entity \\
+I-LOC & Inside a location entity \\
+B-MISC & Beginning of a miscellaneous entity \\
+I-MISC & Inside a miscellaneous entity \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+For example:
+
+\begin{table}[H]
+\centering
+\caption{Example token-label pairs.}
+\begin{tabular}{ll}
+\toprule
+Token & Label \\
+\midrule
+EU & B-ORG \\
+rejects & O \\
+German & B-MISC \\
+call & O \\
+to & O \\
+boycott & O \\
+British & B-MISC \\
+lamb & O \\
+. & O \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Token-Label Alignment}
+
+For the CRF model, token-label alignment is direct because each original token corresponds to exactly one BIO label.
+
+For the BERT-based model, token-label alignment is more complex because BERT uses subword tokenization. A word may be split into multiple subword tokens. In this case, the gold label was assigned only to the first subword token, and the remaining subwords were assigned \texttt{-100}, which is ignored during loss computation. This ensures that evaluation remains aligned with the original word-level labels.
+
+\subsection{Models}
+
+Two models were implemented and compared:
+
+\begin{enumerate}[leftmargin=*]
+    \item CRF as a classical sequence labeling model.
+    \item BERT token classification as a transformer-based contextual model \cite{devlin2019bert}.
+\end{enumerate}
+
+The CRF model used handcrafted features such as lowercased word form, suffixes, capitalization, digit information, previous word features, and next word features. The BERT model used \texttt{bert-base-cased}, which is appropriate for NER because capitalization is an important signal for named entities.
+
+\subsection{Results}
+
+\begin{table}[H]
+\centering
+\caption{Question 2 NER results.}
+\begin{tabular}{lccc}
+\toprule
+Model & Precision & Recall & F1-score \\
+\midrule
+CRF & 0.837 & 0.783 & 0.809 \\
+BERT & \textbf{0.870} & \textbf{0.886} & \textbf{0.878} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+BERT achieved the best overall performance with an F1-score of 0.878, compared with 0.809 for CRF. BERT also achieved higher recall, meaning it detected more entity spans than CRF.
+
+The CRF model still performed reasonably well, especially considering that it relies on handcrafted features rather than pretrained contextual embeddings. However, its lower recall suggests that it missed more entities.
+
+\subsection{CRF Detailed Results}
+
+\begin{table}[H]
+\centering
+\caption{CRF entity-level results.}
+\begin{tabular}{lccc}
+\toprule
+Entity Type & Precision & Recall & F1-score \\
+\midrule
+LOC & 0.87 & 0.80 & 0.83 \\
+MISC & 0.83 & 0.75 & 0.79 \\
+ORG & 0.75 & 0.68 & 0.71 \\
+PER & 0.86 & 0.86 & 0.86 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The CRF model performed best on \texttt{PER} entities and weakest on \texttt{ORG} entities. Organization names are often more difficult because they can have diverse surface forms and may overlap with location or miscellaneous entity patterns.
+
+\subsection{Error Analysis}
+
+Five misclassified examples from the BERT model were analyzed.
+
+\begin{table}[H]
+\centering
+\caption{BERT NER error examples.}
+\begin{tabular}{p{0.7cm}p{8.5cm}p{5cm}}
+\toprule
+No. & Sentence & Error Type \\
+\midrule
+1 & ``Pro-Moscow leaders in Chechnya...'' & Entity type confusion \\
+2 & ``Singapore hanged a Thai farmer at Changi Prison...'' & Boundary error \\
+3 & ``Bristol : Gloucestershire...'' & Entity type confusion \\
+4 & ``UNITED NATIONS 1996-08-29'' & Multi-token entity confusion \\
+5 & ``The Dow Jones industrial average...'' & Entity type confusion \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+In the first example, \textit{Pro-Moscow} was missed completely, and \textit{Chechnya} was predicted as \texttt{MISC} instead of \texttt{LOC}. This shows both false negative and entity type confusion errors.
+
+In the second example, the model failed to label \textit{Prison} as part of \textit{Changi Prison}, which is a boundary error. In the fourth example, \textit{UNITED NATIONS} was inconsistently labeled across tokens, showing a multi-token consistency problem.
+
+\subsection{Discussion}
+
+The results show that contextual embeddings are highly beneficial for NER. BERT represents each token based on the full sentence context, which helps disambiguate entity types. For example, a word such as \textit{Bristol} may refer to a location or organization depending on context.
+
+However, BERT still made errors involving boundary detection, entity type confusion, and multi-token consistency. This shows that NER is not only about detecting entity tokens but also about correctly identifying entity spans and maintaining consistent BIO labels.
+
+Overall, BERT provided stronger generalization, while CRF remained a competitive and interpretable classical baseline.
+
+% =========================================================
+\section{Question 3 -- Text Summarization}
+% =========================================================
+
+\subsection{Dataset Description}
+
+For this task, the CNN/DailyMail dataset was used to compare extractive and abstractive summarization methods \cite{see2017get}. Each example contains a long news article and a human-written highlight summary.
+
+Each example includes:
+
+\begin{itemize}[leftmargin=*]
+    \item \texttt{article}: full news article
+    \item \texttt{highlights}: reference summary
+    \item \texttt{id}: document identifier
+\end{itemize}
+
+\begin{table}[H]
+\centering
+\caption{CNN/DailyMail dataset split sizes.}
+\begin{tabular}{lc}
+\toprule
+Split & Number of Examples \\
+\midrule
+Train & 287,113 \\
+Validation & 13,368 \\
+Test & 11,490 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+A subset of 20 validation examples was used for computational feasibility. The same subset was used for both TextRank and BART.
+
+\subsection{Methods}
+
+Two summarization methods were implemented:
+
+\begin{enumerate}[leftmargin=*]
+    \item TextRank as an extractive method.
+    \item BART-large-CNN as an abstractive method \cite{lewis2020bart}.
+\end{enumerate}
+
+\subsection{TextRank Extractive Summarization}
+
+TextRank is a graph-based ranking method inspired by PageRank \cite{mihalcea2004textrank}. Each sentence is treated as a node, and sentence similarity is computed using TF-IDF and cosine similarity. PageRank is then applied to rank sentences by importance. The top three ranked sentences are selected and ordered according to their original article positions.
+
+The TextRank pipeline was:
+
+\begin{enumerate}[leftmargin=*]
+    \item Split article into sentences.
+    \item Represent sentences using TF-IDF.
+    \item Compute cosine similarity between sentences.
+    \item Build a sentence similarity graph.
+    \item Apply PageRank.
+    \item Select top 3 sentences.
+    \item Preserve original order.
+\end{enumerate}
+
+Since TextRank is extractive, it copies sentences directly from the source article. This improves factual faithfulness but may reduce fluency and compactness.
+
+\subsection{BART Abstractive Summarization}
+
+For abstractive summarization, \texttt{facebook/bart-large-cnn} was used. BART is a pretrained sequence-to-sequence transformer model. Unlike TextRank, BART can generate new sentences and paraphrase the source article.
+
+\begin{table}[H]
+\centering
+\caption{BART summarization setup.}
+\begin{tabular}{ll}
+\toprule
+Parameter & Value \\
+\midrule
+Model & facebook/bart-large-cnn \\
+Input truncation & 1024 tokens \\
+Max summary length & 130 tokens \\
+Min summary length & 30 tokens \\
+Beam search & 4 beams \\
+Sampling & Disabled \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Evaluation Metrics}
+
+The summaries were evaluated using ROUGE-1, ROUGE-2, ROUGE-L, BLEU, METEOR, and BERTScore.
+
+\begin{table}[H]
+\centering
+\caption{Summarization evaluation metrics.}
+\begin{tabular}{ll}
+\toprule
+Metric & Purpose \\
+\midrule
+ROUGE-1 & Unigram overlap \\
+ROUGE-2 & Bigram overlap \\
+ROUGE-L & Longest common subsequence \\
+BLEU & Translation-style n-gram precision \\
+METEOR & Alignment, stemming, and synonym matching \\
+BERTScore & Contextual semantic similarity \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Results}
+
+\begin{table}[H]
+\centering
+\caption{Question 3 summarization results.}
+\begin{tabular}{lcccccc}
+\toprule
+Method & ROUGE-1 & ROUGE-2 & ROUGE-L & BLEU & METEOR & BERTScore-F1 \\
+\midrule
+TextRank & 0.351 & 0.139 & 0.233 & 0.096 & 0.323 & 0.866 \\
+BART & \textbf{0.397} & \textbf{0.172} & \textbf{0.281} & \textbf{0.163} & \textbf{0.337} & \textbf{0.875} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+BART outperformed TextRank across all automatic metrics. It achieved higher ROUGE, BLEU, METEOR, and BERTScore-F1 values. This suggests that BART summaries were closer to the reference summaries both lexically and semantically.
+
+\subsection{Qualitative Analysis}
+
+\subsubsection{Example 1}
+
+\textbf{Reference Summary}
+
+\begin{lstlisting}
+Jarryd Hayne quit the NRL in October to try and get into American Football.
+This week, he signed a three-year contract with the San Francisco 49ers.
+The chairman of the US Association of Rugby League welcomed his arrival.
+\end{lstlisting}
+
+\textbf{TextRank Summary}
+
+\begin{lstlisting}
+The Australia international full-back or centre quit the National Rugby League in October to try his luck in American football and was this week given a three-year contract with the San Francisco 49ers. Hayne, who played rugby league for Australia, has signed a three year contract with the 49ers. Hayne could play at full back or centre in rugby league and is expected to be a running back for the 49ers.
+\end{lstlisting}
+
+\textbf{BART Summary}
+
+\begin{lstlisting}
+Jarryd Hayne quit the NRL in October to try his luck in American football. The 27-year-old has signed a three-year contract with the San Francisco 49ers. Hayne could play at full back or centre in rugby league. He is expected to be a running back for the 49ers.
+\end{lstlisting}
+
+Both models captured the main event. However, TextRank produced a more repetitive and extractive summary, while BART generated a more fluent and compact summary closer to the reference style.
+
+\subsubsection{Example 2}
+
+TextRank selected relevant sentences but included long source fragments. BART produced a more coherent narrative covering Faith March's anorexia, hospital treatment, and recovery through her patisserie business. BART was more fluent, while TextRank was more directly faithful to the source.
+
+\subsubsection{Example 3}
+
+TextRank selected a sentence beginning with ``ET Tuesday,'' which is not fully self-contained. This shows a common weakness of extractive summarization: selected sentences may depend on previous context. BART produced a cleaner and more readable summary about \textit{Community} returning for its sixth season on Yahoo.
+
+\subsection{Discussion}
+
+TextRank is computationally cheaper, more transparent, and generally faithful because it directly extracts source sentences. However, it can produce summaries that are less fluent, overly long, or contextually incomplete.
+
+BART is more computationally expensive but produces more fluent and compact summaries. It can paraphrase and combine information from different parts of the article. However, as an abstractive model, it may carry a higher risk of hallucination.
+
+In this experiment, BART achieved better automatic scores and more readable summaries. TextRank remained useful as a faithful and interpretable extractive baseline.
+
+% =========================================================
+\section{Question 4 -- Machine Translation}
+% =========================================================
+
+\subsection{Dataset Description}
+
+For this task, the Multi30k dataset was used for English-to-German machine translation \cite{elliott2016multi30k}. Multi30k consists of short image-caption style sentence pairs.
+
+The translation direction was English to German. Each example contains an English source sentence and a German reference translation.
+
+A subset of the dataset was used for computational feasibility. The same validation examples were used for both the Seq2Seq with Attention model and the pretrained Transformer model.
+
+\subsection{Preprocessing}
+
+For the Seq2Seq model, a simple preprocessing pipeline was used:
+
+\begin{enumerate}[leftmargin=*]
+    \item Lowercase text.
+    \item Separate punctuation.
+    \item Normalize whitespace.
+    \item Tokenize by whitespace.
+    \item Build source and target vocabularies.
+    \item Add \texttt{<pad>}, \texttt{<sos>}, \texttt{<eos>}, and \texttt{<unk>}.
+    \item Truncate or pad sequences to 40 tokens.
+\end{enumerate}
+
+For the pretrained Transformer model, the model's own tokenizer was used.
+
+\subsection{Models}
+
+Two translation models were compared:
+
+\begin{enumerate}[leftmargin=*]
+    \item Seq2Seq with Attention
+    \item Pretrained Transformer-based MarianMT model
+\end{enumerate}
+
+\subsection{Seq2Seq with Attention}
+
+The Seq2Seq model used a bidirectional GRU encoder and a GRU decoder with additive attention. The attention mechanism allows the decoder to focus on different encoder states while generating each target token.
+
+\begin{table}[H]
+\centering
+\caption{Seq2Seq with attention setup.}
+\begin{tabular}{ll}
+\toprule
+Component & Setting \\
+\midrule
+Encoder & Bidirectional GRU \\
+Decoder & GRU \\
+Attention & Additive attention \\
+Embedding dimension & 128 \\
+Hidden dimension & 256 \\
+Dropout & 0.3 \\
+Epochs & 5 \\
+Teacher forcing ratio & 0.5 \\
+Optimizer & Adam \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Pretrained Transformer}
+
+The pretrained model used was \texttt{Helsinki-NLP/opus-mt-en-de}, which is a MarianMT model pretrained on large-scale English-German parallel corpora \cite{junczys2018marian}. Its subword tokenizer reduces unknown word problems and improves handling of rare words.
+
+\subsection{Evaluation Metrics}
+
+\begin{table}[H]
+\centering
+\caption{Machine translation evaluation metrics.}
+\begin{tabular}{ll}
+\toprule
+Metric & Purpose \\
+\midrule
+BLEU & N-gram precision with brevity penalty \\
+METEOR & Alignment and synonym-aware similarity \\
+ChrF & Character n-gram F-score \\
+BERTScore & Contextual semantic similarity \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Results}
+
+\begin{table}[H]
+\centering
+\caption{Question 4 machine translation results.}
+\begin{tabular}{lcccc}
+\toprule
+Model & BLEU & METEOR & ChrF & BERTScore-F1 \\
+\midrule
+Seq2Seq + Attention & 1.645 & 0.396 & 29.297 & 0.685 \\
+Pretrained Transformer & \textbf{36.511} & \textbf{0.647} & \textbf{63.652} & \textbf{0.895} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The pretrained Transformer clearly outperformed the Seq2Seq with Attention model across all metrics. This large gap is expected because the Seq2Seq model was trained from scratch on a limited subset, while the Transformer was pretrained on large-scale parallel data.
+
+\subsection{Qualitative Analysis}
+
+\subsubsection{Example 1}
+
+\textbf{Source}
+\begin{lstlisting}
+2 girls playing volleyball, one striking the ball.
+\end{lstlisting}
+
+\textbf{Reference}
+\begin{lstlisting}
+Zwei Mädchen spielen Volleyball, wobei das eine den Ball schlägt.
+\end{lstlisting}
+
+\textbf{Seq2Seq Output}
+\begin{lstlisting}
+<unk> mädchen spielen <unk> <unk> den ball .
+\end{lstlisting}
+
+\textbf{Transformer Output}
+\begin{lstlisting}
+2 Mädchen spielen Volleyball, eine schlägt den Ball.
+\end{lstlisting}
+
+The Seq2Seq model captured some words but produced several \texttt{<unk>} tokens. The Transformer produced a fluent and semantically accurate translation.
+
+\subsubsection{Example 2}
+
+\textbf{Source}
+\begin{lstlisting}
+A man and woman are walking down a waterside path toward a suspension bridge.
+\end{lstlisting}
+
+\textbf{Reference}
+\begin{lstlisting}
+Ein Mann und eine Frau gehen einen Uferweg entlang auf eine Hängebrücke zu.
+\end{lstlisting}
+
+\textbf{Seq2Seq Output}
+\begin{lstlisting}
+ein mann und eine frau gehen gehen einen <unk> entlang , die eine <unk> entlang .
+\end{lstlisting}
+
+\textbf{Transformer Output}
+\begin{lstlisting}
+Ein Mann und eine Frau gehen einen Wasserweg hinunter zu einer Hängebrücke.
+\end{lstlisting}
+
+The Seq2Seq output contains repetition and unknown tokens. The Transformer output is more fluent and preserves the general meaning.
+
+\subsubsection{Example 3}
+
+\textbf{Source}
+\begin{lstlisting}
+Two man are paddling a kayak along a river with green trees on either side.
+\end{lstlisting}
+
+\textbf{Reference}
+\begin{lstlisting}
+Zwei Männer paddeln in einem Kajak einen Fluss mit grünen Bäumen auf beiden Seiten entlang.
+\end{lstlisting}
+
+\textbf{Seq2Seq Output}
+\begin{lstlisting}
+zwei mann mit einem einem mit einem fahrrad mit einem <unk> mit einem <unk> .
+\end{lstlisting}
+
+\textbf{Transformer Output}
+\begin{lstlisting}
+Zwei Mann paddeln ein Kajak entlang eines Flusses mit grünen Bäumen auf beiden Seiten.
+\end{lstlisting}
+
+The Seq2Seq model produced repetition and incorrect lexical choices such as \textit{fahrrad}, which does not appear in the source. The Transformer preserved most of the meaning, although \textit{Mann} should ideally be \textit{Männer}.
+
+\subsection{Discussion}
+
+The Seq2Seq with Attention model is useful for understanding sequence-to-sequence modeling and attention mechanisms. However, it struggled with unknown words, repetition, rare words, and long-range dependencies.
+
+The pretrained Transformer performed much better because it benefits from large-scale pretraining, subword tokenization, and self-attention. It produced more fluent, complete, and semantically faithful translations.
+
+BLEU reflected the large difference in n-gram overlap. ChrF was useful because German is morphologically rich and character-level overlap captures partial word-form similarity. METEOR rewarded better alignments, while BERTScore showed stronger semantic similarity for the Transformer outputs.
+
+% =========================================================
+\section{Question 5 -- Language Modeling}
+% =========================================================
+
+\subsection{Dataset Description}
+
+For this task, the WikiText-2 dataset was used for language modeling \cite{merity2016wikitext}. WikiText-2 is a word-level language modeling dataset constructed from Wikipedia articles. The objective is to model the probability of token sequences and predict the next token given previous context.
+
+\begin{table}[H]
+\centering
+\caption{WikiText-2 dataset split sizes.}
+\begin{tabular}{lc}
+\toprule
+Split & Number of Lines \\
+\midrule
+Train & 36,718 \\
+Validation & 3,760 \\
+Test & 4,358 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+After preprocessing, the token counts were:
+
+\begin{table}[H]
+\centering
+\caption{WikiText-2 token counts after preprocessing.}
+\begin{tabular}{lc}
+\toprule
+Split & Number of Tokens \\
+\midrule
+Train & 447,047 \\
+Validation & 47,550 \\
+Test & 59,678 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+A vocabulary of 10,000 tokens was built from the training set. Rare or unseen words were mapped to \texttt{<unk>}.
+
+\subsection{Preprocessing}
+
+The preprocessing pipeline was:
+
+\begin{enumerate}[leftmargin=*]
+    \item Convert text to lowercase.
+    \item Remove empty lines.
+    \item Remove WikiText section markers.
+    \item Tokenize using word-level tokenization.
+    \item Build vocabulary from the training set.
+    \item Replace out-of-vocabulary words with \texttt{<unk>}.
+\end{enumerate}
+
+For LSTM training, sequences were divided into segments of 35 tokens, where the input sequence is used to predict the next-token-shifted target sequence.
+
+\subsection{Models}
+
+Two language models were implemented:
+
+\begin{enumerate}[leftmargin=*]
+    \item Trigram N-gram Language Model
+    \item LSTM Language Model
+\end{enumerate}
+
+\subsection{Trigram N-gram Model}
+
+The trigram model estimates:
+
+\begin{equation}
+P(w_i \mid w_{i-2}, w_{i-1})
+\end{equation}
+
+Add-k smoothing was used with $\alpha=0.1$. The smoothed probability is:
+
+\begin{equation}
+P(w \mid context) = \frac{count(context, w) + \alpha}{count(context) + \alpha |V|}
+\end{equation}
+
+This model is simple and interpretable, but it only uses the previous two words as context.
+
+\subsection{LSTM Language Model}
+
+The LSTM model used distributed word embeddings and recurrent hidden states to model longer context.
+
+\begin{table}[H]
+\centering
+\caption{LSTM language model setup.}
+\begin{tabular}{ll}
+\toprule
+Component & Setting \\
+\midrule
+Embedding dimension & 128 \\
+Hidden dimension & 256 \\
+Number of LSTM layers & 2 \\
+Dropout & 0.3 \\
+Sequence length & 35 \\
+Batch size & 64 \\
+Epochs & 5 \\
+Optimizer & Adam \\
+Loss function & CrossEntropyLoss \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Perplexity was computed as:
+
+\begin{equation}
+Perplexity = \exp(loss)
+\end{equation}
+
+Lower perplexity indicates better language modeling performance.
+
+\subsection{Results}
+
+\begin{table}[H]
+\centering
+\caption{Question 5 language modeling results.}
+\begin{tabular}{lcc}
+\toprule
+Model & Validation Perplexity & Test Perplexity \\
+\midrule
+Trigram N-gram & 2205.38 & 2305.19 \\
+LSTM & \textbf{147.38} & \textbf{148.30} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The LSTM language model substantially outperformed the trigram N-gram model. The trigram model produced very high perplexity because it relies only on the previous two tokens and suffers from data sparsity. The LSTM achieved much lower perplexity because it can learn longer sequential dependencies.
+
+\subsection{LSTM Training Behavior}
+
+\begin{table}[H]
+\centering
+\caption{LSTM training behavior across epochs.}
+\begin{tabular}{ccc}
+\toprule
+Epoch & Train Perplexity & Validation Perplexity \\
+\midrule
+1 & 211.13 & \textbf{147.38} \\
+2 & 80.70 & 162.28 \\
+3 & 55.60 & 188.77 \\
+4 & 44.78 & 218.36 \\
+5 & 38.67 & 247.27 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Although training perplexity continuously decreased, validation perplexity increased after the first epoch. Therefore, the checkpoint from epoch 1 was selected as the best model. This indicates overfitting: the model learned the training data more closely but generalized worse to unseen data.
+
+\subsection{Generated Text Samples}
+
+\subsubsection{Trigram Samples}
+
+\textbf{Prompt: \texttt{the}}
+\begin{lstlisting}
+the eyes everett benjamin ballcourt likely analysis does attitudes culmination tony january vaguely coinage beyonce 're aspects drawing guards 59 portion poetry mix watch median subcontinent serialised elected nile cheltenham republic
+\end{lstlisting}
+
+\textbf{Prompt: \texttt{in the}}
+\begin{lstlisting}
+in the 1929 egyptians advantage governess midway vertically thaksin dock shoop hudson martial grassland stated understated funds miracle camera users 16th agency transcend devastating potato humidity scandal ilp itself transportation castle princeton
+\end{lstlisting}
+
+\textbf{Prompt: \texttt{he}}
+\begin{lstlisting}
+he ha height edinburgh accordingly flat maximus sb flattened involved acorn slipped spread have omniscient restaurant cruelty romanesque appointed statues hit prolonged solar requested books bringing chicks forget limantour cooled uniform
+\end{lstlisting}
+
+The trigram model generated mostly incoherent word sequences. Some local combinations may appear plausible, but the output lacks grammatical structure and semantic coherence.
+
+\subsubsection{LSTM Samples}
+
+\textbf{Prompt: \texttt{the}}
+\begin{lstlisting}
+the other , the u.s. god who had begun a <unk> group . that also did not <unk> to <unk> their <unk> from the <unk> . <unk> enjoyed a series of
+\end{lstlisting}
+
+\textbf{Prompt: \texttt{in the}}
+\begin{lstlisting}
+in the establishment of <unk> . he is three support for the state of the church in <unk> and <unk> . the army was <unk> to <unk> . this team were ruled
+\end{lstlisting}
+
+\textbf{Prompt: \texttt{he}}
+\begin{lstlisting}
+he recovered to experience in the city and 1855 of a link of the <unk> flight of orbit and the french <unk> . on december 28 , 2007 , the final
+\end{lstlisting}
+
+The LSTM generated more fluent and sentence-like text than the trigram model. It produced more recognizable phrase structures and punctuation. However, it still contained \texttt{<unk>} tokens and semantic inconsistencies, showing limitations in vocabulary coverage and long-range coherence.
+
+\subsection{Discussion}
+
+The trigram model is simple and interpretable, but it suffers from data sparsity and limited context. It cannot model long-range dependencies and therefore produces incoherent text with very high perplexity.
+
+The LSTM model performs much better because it learns dense word representations and maintains a hidden state over time. This allows it to capture longer context and generate more fluent text. However, it also showed overfitting, and its generated samples still contained unknown tokens and semantic inconsistencies.
+
+Overall, the LSTM provided much stronger probabilistic sequence modeling than the trigram baseline, while the trigram model served as a simple interpretable baseline.
+
+% =========================================================
+\section{Conclusion}
+% =========================================================
+
+Across the five tasks, transformer-based or pretrained models generally achieved the strongest performance. DistilBERT outperformed sparse and recurrent models in sentiment classification, BERT improved NER performance over CRF, BART produced stronger summaries than TextRank, and the pretrained MarianMT Transformer substantially outperformed a Seq2Seq model trained from scratch. In language modeling, the LSTM model substantially outperformed the trigram baseline, although it still showed overfitting and vocabulary limitations.
+
+These results show that pretrained contextual models provide strong generalization across NLU and NLG tasks. However, classical models such as TF-IDF, CRF, TextRank, and N-gram models remain useful as interpretable baselines and help reveal the strengths and limitations of more complex neural approaches.
+
+\begin{thebibliography}{99}
+
+\bibitem{socher2013recursive}
+Richard Socher, Alex Perelygin, Jean Wu, Jason Chuang, Christopher D. Manning, Andrew Y. Ng, and Christopher Potts.
+\newblock Recursive Deep Models for Semantic Compositionality Over a Sentiment Treebank.
+\newblock In \emph{Proceedings of the 2013 Conference on Empirical Methods in Natural Language Processing}, pages 1631--1642, 2013.
+
+\bibitem{tjong2003conll}
+Erik F. Tjong Kim Sang and Fien De Meulder.
+\newblock Introduction to the CoNLL-2003 Shared Task: Language-Independent Named Entity Recognition.
+\newblock In \emph{Proceedings of the Seventh Conference on Natural Language Learning at HLT-NAACL 2003}, pages 142--147, 2003.
+
+\bibitem{elliott2016multi30k}
+Desmond Elliott, Stella Frank, Khalil Sima'an, and Lucia Specia.
+\newblock Multi30K: Multilingual English-German Image Descriptions.
+\newblock In \emph{Proceedings of the 5th Workshop on Vision and Language}, pages 70--74, 2016.
+
+\bibitem{merity2016wikitext}
+Stephen Merity, Caiming Xiong, James Bradbury, and Richard Socher.
+\newblock Pointer Sentinel Mixture Models.
+\newblock \emph{arXiv preprint arXiv:1609.07843}, 2016.
+
+\bibitem{devlin2019bert}
+Jacob Devlin, Ming-Wei Chang, Kenton Lee, and Kristina Toutanova.
+\newblock BERT: Pre-training of Deep Bidirectional Transformers for Language Understanding.
+\newblock In \emph{Proceedings of NAACL-HLT}, pages 4171--4186, 2019.
+
+\bibitem{sanh2019distilbert}
+Victor Sanh, Lysandre Debut, Julien Chaumond, and Thomas Wolf.
+\newblock DistilBERT, a Distilled Version of BERT: Smaller, Faster, Cheaper and Lighter.
+\newblock \emph{arXiv preprint arXiv:1910.01108}, 2019.
+
+\bibitem{lewis2020bart}
+Mike Lewis, Yinhan Liu, Naman Goyal, Marjan Ghazvininejad, Abdelrahman Mohamed, Omer Levy, Veselin Stoyanov, and Luke Zettlemoyer.
+\newblock BART: Denoising Sequence-to-Sequence Pre-training for Natural Language Generation, Translation, and Comprehension.
+\newblock In \emph{Proceedings of the 58th Annual Meeting of the Association for Computational Linguistics}, pages 7871--7880, 2020.
+
+\bibitem{see2017get}
+Abigail See, Peter J. Liu, and Christopher D. Manning.
+\newblock Get To The Point: Summarization with Pointer-Generator Networks.
+\newblock In \emph{Proceedings of the 55th Annual Meeting of the Association for Computational Linguistics}, pages 1073--1083, 2017.
+
+\bibitem{mihalcea2004textrank}
+Rada Mihalcea and Paul Tarau.
+\newblock TextRank: Bringing Order into Text.
+\newblock In \emph{Proceedings of the 2004 Conference on Empirical Methods in Natural Language Processing}, pages 404--411, 2004.
+
+\bibitem{vaswani2017attention}
+Ashish Vaswani, Noam Shazeer, Niki Parmar, Jakob Uszkoreit, Llion Jones, Aidan N. Gomez, Lukasz Kaiser, and Illia Polosukhin.
+\newblock Attention Is All You Need.
+\newblock In \emph{Advances in Neural Information Processing Systems}, 2017.
+
+\bibitem{junczys2018marian}
+Marcin Junczys-Dowmunt, Roman Grundkiewicz, Tomasz Dwojak, Hieu Hoang, Kenneth Heafield, Tom Neckermann, Frank Seide, Ulrich Germann, Alham Fikri Aji, Nikolay Bogoychev, Andr{\'e} F. T. Martins, and Alexandra Birch.
+\newblock Marian: Fast Neural Machine Translation in C++.
+\newblock In \emph{Proceedings of ACL 2018, System Demonstrations}, pages 116--121, 2018.
+
+\bibitem{lin2004rouge}
+Chin-Yew Lin.
+\newblock ROUGE: A Package for Automatic Evaluation of Summaries.
+\newblock In \emph{Text Summarization Branches Out}, pages 74--81, 2004.
+
+\bibitem{papineni2002bleu}
+Kishore Papineni, Salim Roukos, Todd Ward, and Wei-Jing Zhu.
+\newblock BLEU: a Method for Automatic Evaluation of Machine Translation.
+\newblock In \emph{Proceedings of the 40th Annual Meeting of the Association for Computational Linguistics}, pages 311--318, 2002.
+
+\bibitem{banerjee2005meteor}
+Satanjeev Banerjee and Alon Lavie.
+\newblock METEOR: An Automatic Metric for MT Evaluation with Improved Correlation with Human Judgments.
+\newblock In \emph{Proceedings of the ACL Workshop on Intrinsic and Extrinsic Evaluation Measures for Machine Translation and/or Summarization}, pages 65--72, 2005.
+
+\bibitem{zhang2020bertscore}
+Tianyi Zhang, Varsha Kishore, Felix Wu, Kilian Q. Weinberger, and Yoav Artzi.
+\newblock BERTScore: Evaluating Text Generation with BERT.
+\newblock In \emph{International Conference on Learning Representations}, 2020.
+
+\bibitem{popovic2015chrf}
+Maja Popovi{\'c}.
+\newblock chrF: character n-gram F-score for automatic MT evaluation.
+\newblock In \emph{Proceedings of the Tenth Workshop on Statistical Machine Translation}, pages 392--395, 2015.
+
+\end{thebibliography}
+
+\end{document}
